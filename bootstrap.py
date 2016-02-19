@@ -25,8 +25,12 @@ def get_architecture():
         return "x86"
 
 FQDN = socket.getfqdn()
-HOSTNAME = FQDN.split('.')[0]
-DOMAIN = FQDN[FQDN.index('.')+1:]
+if FQDN.find(".") != -1:
+    HOSTNAME = FQDN.split('.')[0]
+    DOMAIN = FQDN[FQDN.index('.')+1:]
+else:
+    HOSTNAME = FQDN
+    DOMAIN = None
 HEXMAC = hex(getnode())
 NOHEXMAC = HEXMAC[2:]
 MAC = NOHEXMAC.zfill(13)[0:12]
@@ -62,6 +66,12 @@ if not (options.sat6_fqdn and options.login and (options.remove or (options.org 
     print "Must specify server, login, hostgroup, location, and organization options.  See usage:"
     parser.print_help()
     print "\nExample usage: ./bootstrap.py -l admin -s satellite.example.com -o Default_Organization -L Default_Location -g My_Hostgroup -a My_Activation_Key"
+    sys.exit(1)
+
+if not DOMAIN and not (options.force or options.no_puppet):
+    print "We could not determine the domain of this machine, most probably `hostname -f` does not return the FQDN."
+    print "This can lead to Puppet missbehaviour and thus the script will terminate now."
+    print "You can override this by passing --force or --skip-puppet"
     sys.exit(1)
 
 if not options.password:
@@ -439,11 +449,14 @@ def create_host():
     myhgid = return_matching_hg_id(options.hostgroup)
     mylocid = return_matching_location(options.location)
     myorgid = return_matching_org(options.org)
-    mydomainid = return_matching_domain_id(DOMAIN)
+    if DOMAIN:
+        mydomainid = return_matching_domain_id(DOMAIN)
+    else:
+        mydomainid = None
     architecture_id = return_matching_architecture_id(ARCHITECTURE)
     host_id = return_matching_host(FQDN)
     # create the starting json, to be filled below
-    jsondata = json.loads('{"host": {"name": "%s","hostgroup_id": %s,"organization_id": %s,"location_id": %s,"mac":"%s", "domain_id":%s,"architecture_id":%s}}' % (HOSTNAME, myhgid, myorgid, mylocid, MAC, mydomainid, architecture_id))
+    jsondata = json.loads('{"host": {"name": "%s","hostgroup_id": %s,"organization_id": %s,"location_id": %s,"mac":"%s","architecture_id":%s}}' % (HOSTNAME, myhgid, myorgid, mylocid, MAC, architecture_id))
     # optional parameters
     if options.operatingsystem is not None:
       operatingsystem_id = return_matching_operatingsystem_id(options.operatingsystem)
@@ -452,6 +465,8 @@ def create_host():
         jsondata['host']['managed'] = 'true'
     else:
         jsondata['host']['managed'] = 'false'
+    if mydomainid:
+        jsondata['host']['domain_id'] = mydomainid
     if options.verbose:
         print json.dumps(jsondata, sort_keys = False, indent = 2)
     myurl = "https://" + options.sat6_fqdn + ":" + API_PORT + "/api/v2/hosts/"
