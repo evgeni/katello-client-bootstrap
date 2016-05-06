@@ -179,6 +179,12 @@ def unregister_system():
     print_generic("Unregistering")
     exec_failexit("/usr/sbin/subscription-manager unregister")
 
+
+def enable_satellite_tools():
+    print_generic("Enabling satellite-tools repository for Puppet and Katello agents")
+    exec_failexit("subscription-manager repos --enable=rhel-*-satellite-tools-*-rpms")
+
+
 def clean_katello_agent():
     print_generic("Removing old Katello agent and certs")
     exec_failexit("/usr/bin/yum -y erase katello-ca-consumer-* katello-agent gofer")
@@ -433,6 +439,7 @@ else:
     register_systems(options.org, options.activationkey, options.release)
 
 if not options.remove:
+    enable_satellite_tools()
     install_katello_agent()
     if options.update:
         fully_update_the_box()
